@@ -259,7 +259,7 @@ td strong { color: var(--ink); }
 @keyframes toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 
 /* Sign-in */
-.auth-wrap { display: grid; min-height: 100vh; place-items: center; padding: 24px; background: #f4f7fc; }
+.auth-wrap { display: grid; min-height: 100vh; place-items: center; padding: 24px; color: #17243a; color-scheme: light; background: #f4f7fc; }
 .auth-card { display: grid; width: min(960px, 100%); min-height: 570px; grid-template-columns: 1fr 1fr; overflow: hidden; border: 1px solid #e9edf4; border-radius: 22px; background: #fff; box-shadow: 0 24px 90px rgba(20,42,82,.12); }
 .auth-brand { position: relative; display: flex; flex-direction: column; justify-content: space-between; overflow: hidden; padding: 31px; color: #fff; background: radial-gradient(circle at 34% 36%, #1b355a, #111e32 67%); }
 .brand-lockup { z-index: 1; display: flex; align-items: center; gap: 9px; font-family: var(--font-display); font-size: 12px; font-weight: 800; letter-spacing: .55px; }
@@ -277,20 +277,22 @@ td strong { color: var(--ink); }
 .auth-brand-foot { z-index: 1; }
 .auth-brand-foot h2 { margin: 0 0 8px; font-family: var(--font-display); font-size: 25px; font-weight: 800; line-height: 1.2; }
 .auth-brand-foot p { max-width: 290px; margin: 0; color: #a3b4ce; font-size: 11px; }
-.auth-form { display: flex; flex-direction: column; justify-content: center; padding: 54px clamp(30px,5vw,65px); }
+.auth-form { display: flex; flex-direction: column; justify-content: center; padding: 54px clamp(30px,5vw,65px); color: #17243a; }
 .auth-heading-icon { display: grid; width: 43px; height: 43px; place-items: center; margin-bottom: 20px; border-radius: 13px; color: var(--blue); background: #edf3ff; }
-.auth-form h1 { margin: 0; font-family: var(--font-display); font-size: 25px; font-weight: 800; letter-spacing: -.6px; }
-.muted { color: #8491a4; }
-.auth-subtitle { margin: 7px 0 28px; font-size: 11px; }
-.auth-form .form-field { margin: 0 0 17px; color: #42516a; font-size: 10px; }
-.auth-form .form-field input {  min-height: 42px;  padding: 0 12px;  font-size: 11px;}
-.auth-form .form-field .password-input-wrap {  position: relative;  width: 100%;}
-.auth-form .form-field .password-input-wrap input { width: 100%;  padding-right: 60px;  box-sizing: border-box;}
-.show-password-button {position: absolute;  right: 12px;  top: 50%;  transform: translateY(-50%);  border: none;  background: transparent;  color: #2563eb;  font: inherit;  font-size: 13px;  font-weight: 600;  cursor: pointer;}
-.auth-options { display: flex; justify-content: space-between; align-items: center; margin: 0 0 20px; color: #8290a3; font-size: 9px; }
+.auth-form h1 { margin: 0; color: #17243a; font-family: var(--font-display); font-size: 27px; font-weight: 800; letter-spacing: -.6px; }
+.auth-form .muted { color: #66758b; }
+.auth-subtitle { margin: 7px 0 28px; font-size: 13px; line-height: 1.5; }
+.auth-form .form-field { margin: 0 0 17px; color: #42516a; font-size: 12px; }
+.auth-form .form-field input { min-height: 44px; padding: 0 12px; border-color: #d7dfeb; color: #17243a; background: #fff; font-size: 14px; }
+.auth-form .form-field input::placeholder { color: #8794a8; opacity: 1; }
+.auth-form .form-field .password-input-wrap { position: relative; width: 100%; }
+.auth-form .form-field .password-input-wrap input { width: 100%; padding-right: 68px; box-sizing: border-box; }
+.show-password-button { position: absolute; top: 50%; right: 12px; transform: translateY(-50%); border: 0; color: #2563eb; background: transparent; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
+.auth-options { display: flex; justify-content: space-between; align-items: center; margin: 0 0 20px; color: #66758b; font-size: 11px; }
 .auth-options label { display: flex; align-items: center; gap: 5px; }
-.auth-note { margin: 18px 0 0; color: #9aa5b4; font-size: 8px; line-height: 1.5; text-align: center; }
-.error-message { margin-bottom: 14px; padding: 9px 11px; border-radius: 7px; color: #c84858; background: #fff0f1; font-size: 10px; }
+.auth-options a { color: #315fce; font-weight: 600; }
+.auth-note { margin: 18px 0 0; color: #6b788b; font-size: 10px; line-height: 1.5; text-align: center; }
+.error-message { margin-bottom: 14px; padding: 9px 11px; border-radius: 7px; color: #c84858; background: #fff0f1; font-size: 12px; }
 
 @media (max-width: 1250px) {
   .sidebar { flex-basis: 224px; width: 224px; }
@@ -464,29 +466,17 @@ td strong { color: var(--ink); }
   .register-device-page .stepper li > span { width: 28px; height: 28px; flex-basis: 28px; }
   .register-device-page > .form-grid { grid-template-columns: minmax(0, 1fr); gap: 16px; padding: 18px; }
 }
-
-
 /* Device grid layout */
 .device-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); align-items: stretch; gap: 16px; width: 100%; }
-
 .device-card { appearance: none; display: flex; width: 100%; min-width: 0; min-height: 155px; flex-direction: column; align-items: stretch; gap: 13px; padding: 18px; box-sizing: border-box; border: 1px solid var(--line); border-radius: 14px; color: var(--ink); background: var(--surface); font: inherit; text-align: left; cursor: pointer; transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease; }
-
 .device-card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; width: 100%; }
-
 .device-card-top strong { flex: 1; min-width: 0; color: var(--ink); font-size: 14px; font-weight: 700; line-height: 1.45; overflow-wrap: anywhere; }
-  
 .device-card-top > *:last-child { flex-shrink: 0; }
-
 .device-card > small { display: block; color: var(--ink); opacity: 0.7; font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; }
-
 .device-card-meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; width: 100%; margin-top: auto; }
-
 .device-card-meta span { display: block; min-width: 0; padding: 9px; border: 1px solid var(--line); border-radius: 8px; color: var(--ink); background: var(--page); font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; }
-
 .device-card:hover { border-color: var(--blue); box-shadow: var(--shadow); transform: translateY(-2px); }
-
 .device-card:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
-
 @media (max-width: 640px) {
   .device-grid { grid-template-columns: minmax(0, 1fr); gap: 12px; }
   .device-card { min-height: 145px; padding: 15px; }

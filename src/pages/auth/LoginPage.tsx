@@ -8,8 +8,8 @@ export function LoginPage() {
   const navigate = useNavigate()
   const location = useLocation()
   const from = (location.state as { from?: string } | null)?.from ?? '/'
-  const [email, setEmail] = useState('riya@campus.edu')
-  const [password, setPassword] = useState('Attend@123')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -70,7 +70,7 @@ export function LoginPage() {
             </p>
           </div>
         </div>
-        <form className="auth-form" onSubmit={submit}>
+        <form className="auth-form" autoComplete="off" onSubmit={submit}>
           <div className="auth-heading-icon">
             <Icon name="users" size={22} />
           </div>
@@ -86,7 +86,7 @@ export function LoginPage() {
           <label className="form-field">
             <span>Email</span>
             <input
-              autoComplete="username"
+              autoComplete="off"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@campus.edu"
@@ -97,7 +97,7 @@ export function LoginPage() {
 
             <div className="password-input-wrap">
               <input
-                autoComplete="current-password"
+                autoComplete="new-password"
                 type={showPassword ? "text" : "password"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -128,10 +128,8 @@ export function LoginPage() {
             {busy ? "Signing in…" : "Sign in"} <span aria-hidden="true">→</span>
           </button>
           <p className="auth-note">
-            Demo: riya@campus.edu (super admin), office@campus.edu (admin),
-            ananya@campus.edu (teacher), vikram@campus.edu (manager) · password
-            Attend@123. Backend login is tried first; mock accounts work
-            offline.
+            Front-end preview · Connect your authentication service before
+            deployment.
           </p>
         </form>
       </section>
