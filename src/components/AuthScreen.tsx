@@ -6,17 +6,17 @@ interface AuthScreenProps {
 }
 
 export function AuthScreen({ onSignIn }: AuthScreenProps) {
-  const [username, setUsername] = useState('')
+  const [loginId, setLoginId] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!username.trim() || !password.trim()) {
-      setError('Enter your username and password to continue.')
+    if (!loginId.trim() || !password.trim()) {
+      setError('Enter your login ID and password to continue.')
       return
     }
-    onSignIn(username.trim())
+    onSignIn(loginId.trim())
   }
 
   return (
@@ -45,8 +45,8 @@ export function AuthScreen({ onSignIn }: AuthScreenProps) {
           <p className="muted auth-subtitle">Sign in to your admin dashboard to continue</p>
           {error && <div className="error-message" role="alert">{error}</div>}
           <label className="form-field">
-            <span>Username</span>
-            <input autoComplete="username" value={username} onChange={(event) => setUsername(event.target.value)} placeholder="Enter admin username" />
+            <span>Login ID</span>
+            <input autoComplete="username" value={loginId} onChange={(event) => setLoginId(event.target.value)} placeholder="Enter login ID" />
           </label>
           <label className="form-field">
             <span>Password</span>

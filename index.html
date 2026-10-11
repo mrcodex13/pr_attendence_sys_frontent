@@ -5,6 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#101a2b" />
     <meta name="description" content="PR Smart Attendance System — attendance management dashboard" />
+    <script>
+      const theme = localStorage.getItem('sas.theme')
+      if (theme === 'light' || theme === 'dark') document.documentElement.dataset.theme = theme
+    </script>
     <title>PR Smart Attendance System</title>
   </head>
   <body>

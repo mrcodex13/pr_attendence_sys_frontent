@@ -1,92 +1,143 @@
-import { useState } from 'react'
-import { AuthScreen } from './components/AuthScreen'
-import { AppShell } from './components/AppShell'
-import { Dashboard } from './components/Dashboard'
+import { Navigate, Route, Routes } from 'react-router-dom'
+import { ProtectedRoute } from './auth/ProtectedRoute'
+import { AppShell } from './components/layout/AppShell'
+import { LoginPage } from './pages/auth/LoginPage'
+import { ForgotPasswordPage, ResetPasswordPage } from './pages/auth/ForgotPasswordPage'
+import { DashboardPage } from './pages/DashboardPage'
+import { LiveFeedPage } from './pages/LiveFeedPage'
 import {
-  AnalyticsView,
-  AttendanceView,
-  NotificationsView,
-  ProfileView,
-  ReportsView,
-  SettingsView,
-  StudentsView,
-} from './components/ManagementViews'
-import { initialAttendance, initialStudents, notices } from './data'
-import type { AttendanceStatus, PageId, Student } from './types'
+  EnrollmentWizardPage,
+  ImportPage,
+  PeopleListPage,
+  PersonDetailPage,
+  PersonFormPage,
+} from './pages/people/PeoplePages'
+import { OrgLayout } from './pages/org/OrgLayout'
+import { GroupsPage, HolidaysPage, ShiftsPage, TimetablePage } from './pages/org/OrgPages'
+import {
+  AttendanceTodayPage,
+  ExceptionsPage,
+  LeavePage,
+  SessionViewPage,
+} from './pages/attendance/AttendancePages'
+import { DeviceDetailPage, DevicesPage, RegisterDevicePage } from './pages/devices/DevicePages'
+import { ReportsPage, ScheduledReportsPage } from './pages/reports/ReportsPages'
+import { AdminLayout } from './pages/admin/AdminLayout'
+import {
+  AuditPage,
+  NotificationsPage,
+  PrivacyPage,
+  ProfilePage,
+  SettingsPage,
+  UsersPage,
+} from './pages/admin/AdminPages'
+import { ForbiddenPage, NotFoundPage } from './pages/system/SystemPages'
 import './App.css'
 
-function App() {
-  const [isSignedIn, setIsSignedIn] = useState(false)
-  const [adminName, setAdminName] = useState('Admin User')
-  const [page, setPage] = useState<PageId>('dashboard')
-  const [students, setStudents] = useState(initialStudents)
-  const [attendance, setAttendance] = useState(initialAttendance)
-  const [toast, setToast] = useState('')
-  const [attendanceFilter, setAttendanceFilter] = useState<AttendanceStatus | undefined>()
-  const [globalSearch, setGlobalSearch] = useState('')
-
-  function notify(message: string) {
-    setToast(message)
-    window.setTimeout(() => setToast(''), 3200)
-  }
-
-  function navigate(nextPage: PageId) {
-    setPage(nextPage)
-    if (nextPage !== 'attendance') setAttendanceFilter(undefined)
-    window.scrollTo({ top: 0, behavior: 'smooth' })
-  }
-
-  function openAttendance(status: AttendanceStatus) {
-    setAttendanceFilter(status)
-    setPage('attendance')
-  }
-
-  function addStudent(student: Student) {
-    if (students.some((existing) => existing.id.toLowerCase() === student.id.toLowerCase())) {
-      notify(`A student with ID ${student.id} already exists.`)
-      return false
-    }
-    setStudents((current) => [student, ...current])
-    return true
-  }
-
-  function markAttendance() {
-    const unmarked = students.find((student) => !attendance.some((record) => record.id === student.id))
-    if (!unmarked) {
-      notify('All sample students already have an attendance record.')
-      return
-    }
-    const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })
-    setAttendance((current) => [{ id: unmarked.id, name: unmarked.name, dept: unmarked.dept, time, status: 'present' }, ...current])
-    notify(`${unmarked.name} marked present.`)
-  }
-
-  if (!isSignedIn) {
-    return <AuthScreen onSignIn={(name) => { setAdminName(name); setIsSignedIn(true) }} />
-  }
-
+export default function App() {
   return (
-    <AppShell
-      page={page}
-      onNavigate={navigate}
-      onSearch={(value) => {
-        setGlobalSearch(value)
-        if (value.trim()) setPage('students')
-      }}
-      onLogout={() => { setIsSignedIn(false); setPage('dashboard') }}
-      adminName={adminName}
-    >
-      {page === 'dashboard' && <Dashboard students={students} attendance={attendance} notices={notices} adminName={adminName} onNavigate={navigate} onFilterAttendance={openAttendance} onMarkAttendance={markAttendance} />}
-      {page === 'students' && <StudentsView students={students} attendance={attendance} globalSearch={globalSearch} onAddStudent={addStudent} onToast={notify} />}
-      {page === 'attendance' && <AttendanceView students={students} attendance={attendance} initialFilter={attendanceFilter} onAddStudent={addStudent} onToast={notify} />}
-      {page === 'reports' && <ReportsView students={students} attendance={attendance} onAddStudent={addStudent} onToast={notify} />}
-      {page === 'analytics' && <AnalyticsView students={students} attendance={attendance} onAddStudent={addStudent} onToast={notify} />}
-      {page === 'notifications' && <NotificationsView notices={notices} onToast={notify} />}
-      {page === 'settings' && <SettingsView onToast={notify} />}
-      {page === 'profile' && <ProfileView students={students} attendance={attendance} onAddStudent={addStudent} onToast={notify} adminName={adminName} onSaveName={(name) => name && setAdminName(name)} onLogout={() => { setIsSignedIn(false); setPage('dashboard') }} />}
-      {toast && <div className="toast-message" role="status"><span className="toast-check"><span>✓</span></span>{toast}<button type="button" aria-label="Dismiss notification" onClick={() => setToast('')}>×</button></div>}
-    </AppShell>
+    <Routes>
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
+      <Route path="/403" element={<ForbiddenPage />} />
+      <Route
+        element={
+          <ProtectedRoute>
+            <AppShell />
+          </ProtectedRoute>
+        }
+      >
+        <Route path="/" element={<DashboardPage />} />
+        <Route path="/live" element={<LiveFeedPage />} />
+        <Route path="/people" element={<PeopleListPage />} />
+        <Route
+          path="/people/new"
+          element={
+            <ProtectedRoute permission="people.manage">
+              <PersonFormPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/people/import"
+          element={
+            <ProtectedRoute permission="people.manage">
+              <ImportPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/people/enroll"
+          element={
+            <ProtectedRoute permission="people.manage">
+              <EnrollmentWizardPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route path="/people/:id" element={<PersonDetailPage />} />
+        <Route
+          path="/organization"
+          element={
+            <ProtectedRoute permission="groups.manage">
+              <OrgLayout />
+            </ProtectedRoute>
+          }
+        >
+          <Route index element={<Navigate to="groups" replace />} />
+          <Route path="groups" element={<GroupsPage />} />
+          <Route path="timetable" element={<TimetablePage />} />
+          <Route path="shifts" element={<ShiftsPage />} />
+          <Route path="holidays" element={<HolidaysPage />} />
+        </Route>
+        <Route path="/attendance" element={<AttendanceTodayPage />} />
+        <Route path="/attendance/session" element={<SessionViewPage />} />
+        <Route path="/exceptions" element={<ExceptionsPage />} />
+        <Route path="/leave" element={<LeavePage />} />
+        <Route
+          path="/devices"
+          element={
+            <ProtectedRoute permission="devices.manage">
+              <DevicesPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/devices/register"
+          element={
+            <ProtectedRoute permission="devices.manage">
+              <RegisterDevicePage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/devices/:id"
+          element={
+            <ProtectedRoute permission="devices.manage">
+              <DeviceDetailPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route path="/reports" element={<ReportsPage />} />
+        <Route path="/reports/scheduled" element={<ScheduledReportsPage />} />
+        <Route
+          path="/admin"
+          element={
+            <ProtectedRoute permission="settings.manage">
+              <AdminLayout />
+            </ProtectedRoute>
+          }
+        >
+          <Route index element={<Navigate to="settings" replace />} />
+          <Route path="users" element={<UsersPage />} />
+          <Route path="settings" element={<SettingsPage />} />
+          <Route path="audit" element={<AuditPage />} />
+          <Route path="privacy" element={<PrivacyPage />} />
+        </Route>
+        <Route path="/notifications" element={<NotificationsPage />} />
+        <Route path="/profile" element={<ProfilePage />} />
+      </Route>
+      <Route path="*" element={<NotFoundPage />} />
+    </Routes>
   )
 }
-
-export default App
