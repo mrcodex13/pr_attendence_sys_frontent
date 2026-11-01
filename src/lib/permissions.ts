@@ -15,7 +15,9 @@ const ALL: Permission[] = [
   'leave.review',
   'devices.manage',
   'reports.export',
+  'reports.schedule',
   'users.manage',
+  'my-attendance.view',
   'settings.manage',
   'audit.view',
   'privacy.manage',
@@ -30,13 +32,18 @@ const teacher: Permission[] = [
   'exceptions.resolve',
   'leave.review',
   'reports.export',
+  'students.invite',
 ]
 
+const SELF_SERVICE: Permission[] = ['my-attendance.view']
+
 const byRole: Record<Role, Permission[]> = {
-  SUPER_ADMIN: ALL,
-  ADMIN: ALL.filter((p) => p !== 'users.manage'),
+  SUPER_ADMIN: ['platform.manage'],
+  ADMIN: ALL,
   TEACHER: teacher,
-  MANAGER: teacher,
+  MANAGER: teacher.filter((permission) => permission !== 'students.invite'),
+  EMPLOYEE: SELF_SERVICE,
+  STUDENT: SELF_SERVICE,
 }
 
 export function hasPermission(role: Role | undefined, permission: Permission) {

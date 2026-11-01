@@ -1,37 +1,28 @@
 import { useEffect, useState } from 'react'
-import { api } from '../api/client'
+import { connectLiveFeed } from '../api/client'
 import { LiveScanCard } from '../components/ui/Cards'
-import { DeviceHealthDot } from '../components/ui/Status'
 import { EmptyState, PermissionGate } from '../components/ui/Feedback'
 import { PageHeader } from '../components/ui/Workflow'
 import type { ScanEvent } from '../types/domain'
 
 export function LiveFeedPage() {
-  const [scans, setScans] = useState<ScanEvent[]>(() => api.scans())
-  const devices = api.devices()
+  const [scans, setScans] = useState<ScanEvent[]>([])
+  const [error, setError] = useState('')
 
   useEffect(() => {
-    const timer = window.setInterval(() => {
-      api.ingestLiveScan()
-      setScans([...api.scans()])
-    }, 8000)
-    return () => window.clearInterval(timer)
+    return connectLiveFeed(
+      (scan) => setScans((current) => [scan, ...current.filter((item) => item.eventId !== scan.eventId)].slice(0, 50)),
+      (err) => setError(err.message),
+    )
   }, [])
 
   return (
     <PermissionGate permission="live.view">
       <div className="view-stack live-feed-page">
-        <PageHeader title="Live feed" subtitle="New scans arrive without refresh. Photos stay on the device unless an admin uploaded a profile picture." />
-        <div className="device-strip">
-          {devices.map((d) => (
-            <div className="device-strip-item" key={d.id}>
-              <strong>{d.name}</strong>
-              <DeviceHealthDot health={d.health} />
-            </div>
-          ))}
-        </div>
+        <PageHeader title="Live feed" subtitle="Attendance check-ins from camera recognition and registered devices, live." />
+        {error && <p className="field-error" role="alert">{error}</p>}
         {scans.length === 0 ? (
-          <EmptyState title="No scans yet" hint="Stand in front of an enrolled AMB82-Mini, or wait for the demo pulse." />
+          <EmptyState title="No attendance events yet" hint="Camera-recognized check-ins and registered-device scans will appear here as they are recorded." />
         ) : (
           <div className="live-grid">
             {scans.map((scan) => (

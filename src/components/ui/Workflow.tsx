@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react'
-import { RECORD_STATUSES, type RecordStatus } from '../../types/domain'
+import { RECORD_STATUSES, type Person, type RecordStatus } from '../../types/domain'
 
 export function Stepper({ steps, current }: { steps: string[]; current: number }) {
   return (
@@ -102,6 +102,66 @@ export function CorrectionDialog({
             Save correction
           </button>
           <button className="button button-secondary" type="button" onClick={onCancel}>
+            Cancel
+          </button>
+        </div>
+      </form>
+    </div>
+  )
+}
+
+export function ManualAttendanceDialog({
+  people,
+  busy,
+  onCancel,
+  onConfirm,
+}: {
+  people: Person[]
+  busy: boolean
+  onCancel: () => void
+  onConfirm: (personId: string, status: RecordStatus, reason: string) => void
+}) {
+  const [error, setError] = useState('')
+  return (
+    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="manual-attendance-title">
+      <form
+        className="modal-card"
+        onSubmit={(event) => {
+          event.preventDefault()
+          const data = new FormData(event.currentTarget)
+          const reason = String(data.get('reason') ?? '').trim()
+          if (reason.length < 3) {
+            setError('Enter a reason of at least 3 characters.')
+            return
+          }
+          onConfirm(String(data.get('personId') ?? ''), data.get('status') as RecordStatus, reason)
+        }}
+      >
+        <h2 id="manual-attendance-title">Record attendance manually</h2>
+        <p className="muted">This adds a record for today. Your reason and account are saved in the audit log.</p>
+        <label className="form-field">
+          <span>Person</span>
+          <select name="personId" required defaultValue="">
+            <option value="" disabled>Select a person</option>
+            {people.map((person) => <option key={person.id} value={person.id}>{person.name} · {person.personCode}</option>)}
+          </select>
+        </label>
+        <label className="form-field">
+          <span>Status</span>
+          <select name="status" defaultValue="PRESENT">
+            {RECORD_STATUSES.map((status) => <option key={status} value={status}>{status}</option>)}
+          </select>
+        </label>
+        <label className="form-field">
+          <span>Reason (required)</span>
+          <textarea name="reason" rows={3} minLength={3} maxLength={500} required />
+          {error && <small className="field-error" role="alert">{error}</small>}
+        </label>
+        <div className="toolbar-actions">
+          <button className="button button-primary" type="submit" disabled={busy || people.length === 0}>
+            {busy ? 'Saving…' : 'Save manual attendance'}
+          </button>
+          <button className="button button-secondary" type="button" onClick={onCancel} disabled={busy}>
             Cancel
           </button>
         </div>

@@ -14,7 +14,7 @@
   --page: #f6f8fc;
   --surface: #fff;
   --ink: #17243a;
-  --muted: #8390a3;
+  --muted: #5f6b7a;
   --line: #e9edf4;
   --blue: #477cf6;
   --blue-dark: #3164e6;
@@ -25,6 +25,7 @@
   --red-pale: #fff0f1;
   --amber: #e3a13c;
   --amber-pale: #fff6e8;
+  --ring-track: #d7dfec;
   --shadow: 0 8px 30px rgba(26, 48, 88, .045);
 }
 
@@ -42,6 +43,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
   --ink: #eef3fc;
   --muted: #9aa9c0;
   --line: #2b374c;
+  --ring-track: #29364b;
   --blue-pale: #202f4a;
   --green-pale: #1c382f;
   --red-pale: #40282f;

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../auth/AuthContext'
 import { initials } from '../../lib/format'
@@ -6,23 +6,29 @@ import { ConnectionBanner } from '../ui/Feedback'
 import { Icon } from '../Icon'
 import type { Permission } from '../../types/domain'
 
-const nav: Array<{ to: string; label: string; icon: string; permission: Permission; mobile?: boolean }> = [
-  { to: '/', label: 'Dashboard', icon: 'dashboard', permission: 'dashboard.view', mobile: true },
-  { to: '/live', label: 'Live feed', icon: 'live', permission: 'live.view', mobile: true },
-  { to: '/people', label: 'People', icon: 'users', permission: 'people.view', mobile: true },
-  { to: '/organization/groups', label: 'Organization', icon: 'building', permission: 'groups.manage' },
-  { to: '/attendance', label: 'Attendance', icon: 'clock', permission: 'attendance.view', mobile: true },
-  { to: '/exceptions', label: 'Exceptions', icon: 'alert', permission: 'exceptions.resolve' },
-  { to: '/devices', label: 'Devices', icon: 'device', permission: 'devices.manage' },
-  { to: '/reports', label: 'Reports', icon: 'file', permission: 'reports.export', mobile: true },
-  { to: '/admin/settings', label: 'Admin', icon: 'settings', permission: 'settings.manage' },
-  { to: '/notifications', label: 'Alerts', icon: 'bell', permission: 'dashboard.view' },
+const nav: Array<{ to: string; label: string; mobileLabel?: string; icon: string; permission: Permission; section: 'Monitor' | 'Manage' | 'Tools'; mobile?: boolean }> = [
+  { to: '/', label: 'Dashboard', mobileLabel: 'Home', icon: 'dashboard', permission: 'dashboard.view', section: 'Monitor', mobile: true },
+  { to: '/platform', label: 'Organizations', mobileLabel: 'Orgs', icon: 'building', permission: 'platform.manage', section: 'Manage', mobile: true },
+  { to: '/live', label: 'Live feed', mobileLabel: 'Live', icon: 'live', permission: 'live.view', section: 'Monitor', mobile: true },
+  { to: '/people', label: 'People', icon: 'users', permission: 'people.view', section: 'Manage', mobile: true },
+  { to: '/students/invite', label: 'Invite student', mobileLabel: 'Invite', icon: 'users', permission: 'students.invite', section: 'Manage' },
+  { to: '/my-attendance', label: 'My attendance', mobileLabel: 'Mine', icon: 'clock', permission: 'my-attendance.view', section: 'Monitor', mobile: true },
+  { to: '/organization/groups', label: 'Organization', mobileLabel: 'Org', icon: 'building', permission: 'groups.manage', section: 'Manage' },
+  { to: '/attendance', label: 'Attendance', mobileLabel: 'Attend', icon: 'clock', permission: 'attendance.view', section: 'Monitor', mobile: true },
+  { to: '/exceptions', label: 'Scan exceptions', mobileLabel: 'Issues', icon: 'alert', permission: 'exceptions.resolve', section: 'Monitor' },
+  { to: '/devices', label: 'Devices', icon: 'device', permission: 'devices.manage', section: 'Manage' },
+  { to: '/camera', label: 'Camera attendance', mobileLabel: 'Camera', icon: 'camera', permission: 'attendance.view', section: 'Tools', mobile: true },
+  { to: '/reports', label: 'Reports', icon: 'file', permission: 'reports.export', section: 'Tools', mobile: true },
+  { to: '/admin/settings', label: 'Admin', icon: 'settings', permission: 'settings.manage', section: 'Tools' },
 ]
 
 const titles: Record<string, string> = {
   '/': 'Dashboard',
+  '/platform': 'Platform organizations',
   '/live': 'Live feed',
   '/people': 'People',
+  '/students/invite': 'Invite a student',
+  '/my-attendance': 'My attendance',
   '/people/new': 'Add person',
   '/people/import': 'Bulk import',
   '/people/enroll': 'Enrolment wizard',
@@ -35,6 +41,7 @@ const titles: Record<string, string> = {
   '/exceptions': 'Exceptions queue',
   '/leave': 'Leave & excuses',
   '/devices': 'Devices',
+  '/camera': 'Camera attendance',
   '/devices/register': 'Register device',
   '/reports': 'Reports',
   '/reports/scheduled': 'Scheduled reports',
@@ -50,13 +57,13 @@ export function AppShell() {
   const { user, logout, can } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
+  const searchInputRef = useRef<HTMLInputElement>(null)
   const [darkMode, setDarkMode] = useState(() => {
     const savedTheme = localStorage.getItem('sas.theme')
-    return savedTheme ? savedTheme === 'dark' : document.documentElement.dataset.theme === 'dark'
+    return savedTheme ? savedTheme === 'dark' : true
   })
   const [now, setNow] = useState(() => new Date())
   const [online, setOnline] = useState(navigator.onLine)
-  const [sessionExpired, setSessionExpired] = useState(false)
 
   useEffect(() => {
     const theme = darkMode ? 'dark' : 'light'
@@ -77,7 +84,25 @@ export function AppShell() {
     }
   }, [])
 
-  const items = nav.filter((item) => can(item.permission) || item.to === '/notifications')
+  useEffect(() => {
+    const handleSearchShortcut = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault()
+        searchInputRef.current?.focus()
+      }
+    }
+    window.addEventListener('keydown', handleSearchShortcut)
+    return () => window.removeEventListener('keydown', handleSearchShortcut)
+  }, [])
+
+  const items = nav.filter((item) =>
+    can(item.permission) &&
+    (item.to !== '/my-attendance' || user?.role === 'EMPLOYEE' || user?.role === 'STUDENT')
+  )
+  const sections = (['Monitor', 'Manage', 'Tools'] as const)
+    .map((section) => ({ section, items: items.filter((item) => item.section === section) }))
+    .filter((section) => section.items.length > 0)
+  const searchShortcut = /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘ K' : 'Ctrl K'
   const title =
     titles[location.pathname] ??
     (location.pathname.startsWith('/people/')
@@ -88,7 +113,16 @@ export function AppShell() {
 
   const dateLabel = now.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
   const timeLabel = now.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
-  const roleLabel = user?.role.replace('_', ' ') ?? ''
+  const roleLabel = user
+    ? {
+        SUPER_ADMIN: 'Platform admin',
+        ADMIN: 'Organization admin',
+        TEACHER: 'Teacher',
+        MANAGER: 'Manager',
+        EMPLOYEE: 'Employee',
+        STUDENT: 'Student',
+      }[user.role]
+    : ''
 
   const breadcrumbs = useMemo(() => {
     const parts = location.pathname.split('/').filter(Boolean)
@@ -104,32 +138,36 @@ export function AppShell() {
             <strong>{user?.name}</strong>
             <small>{roleLabel}</small>
           </span>
-          <span className="online-dot" />
         </button>
         <nav className="nav-list" aria-label="Main navigation">
-          {items.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.to === '/'}
-              className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
-            >
-              <Icon name={item.icon} />
-              <span className="nav-label">{item.label}</span>
-            </NavLink>
+          {sections.map(({ section, items: sectionItems }) => (
+            <div className="nav-section" key={section}>
+              <span className="nav-section-label">{section}</span>
+              {sectionItems.map((item) => (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  end={item.to === '/'}
+                  aria-label={item.label}
+                  title={item.label}
+                  className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+                >
+                  <Icon name={item.icon} />
+                  <span className="nav-label">{item.label}</span>
+                  <span className="nav-mobile-label">{item.mobileLabel ?? item.label}</span>
+                </NavLink>
+              ))}
+            </div>
           ))}
         </nav>
-        <div className="sidebar-status">
-          <div className="status-line">
-            <span className="status-pulse" /> Devices reporting
-          </div>
-          <small>
-            <Icon name="camera" size={13} /> AMB82-Mini · 1 offline
-          </small>
-          <small>
-            <Icon name="check" size={13} /> Blueprint v1.0
-          </small>
-        </div>
+        {can('devices.manage') && (
+          <button className="sidebar-device-pill" type="button" onClick={() => navigate('/devices')}>
+            <span className="status-pulse status-pending" />
+            <Icon name="camera" size={15} />
+            <span><strong>AMB82-Mini</strong><small>Device setup</small></span>
+            <Icon name="chevron" size={14} />
+          </button>
+        )}
         <button
           className="sidebar-logout"
           onClick={() => {
@@ -147,14 +185,15 @@ export function AppShell() {
         <header className="topbar">
           <div className="topbar-heading">
             <span className="eyebrow">
-              {breadcrumbs.length ? breadcrumbs.join(' / ') : 'home'}
+              {breadcrumbs.length ? breadcrumbs.join(' / ') : 'Home'}
             </span>
             <h1>{title}</h1>
           </div>
           <div className="topbar-actions">
-            <label className="global-search">
+            {can('people.view') && <label className="global-search">
               <Icon name="search" size={17} />
               <input
+                ref={searchInputRef}
                 aria-label="Search people"
                 placeholder="Search people, codes…"
                 onKeyDown={(e) => {
@@ -164,8 +203,8 @@ export function AppShell() {
                   }
                 }}
               />
-              <kbd>⌘ K</kbd>
-            </label>
+              <kbd aria-hidden="true">{searchShortcut}</kbd>
+            </label>}
             <div className="date-label">
               <span>{dateLabel}</span>
               <strong>{timeLabel}</strong>
@@ -179,13 +218,11 @@ export function AppShell() {
             >
               <Icon name={darkMode ? 'sun' : 'moon'} />
             </button>
-            <button className="icon-button" type="button" aria-label="Notifications" onClick={() => navigate('/notifications')}>
-              <Icon name="bell" />
-            </button>
-            <button className="topbar-admin" type="button" onClick={() => navigate('/profile')}>
-              <span className="avatar avatar-small">{initials(user?.name ?? 'A')}</span>
-              <strong>{user?.name.split(' ')[0]}</strong>
-            </button>
+            {can('dashboard.view') && (
+              <button className="icon-button" type="button" aria-label="Open notifications" title="Open notifications" onClick={() => navigate('/notifications')}>
+                <Icon name="bell" />
+              </button>
+            )}
           </div>
         </header>
         <section className="page-content">
@@ -193,25 +230,6 @@ export function AppShell() {
         </section>
       </main>
 
-      {sessionExpired && (
-        <div className="modal-backdrop" role="dialog" aria-modal="true">
-          <div className="modal-card">
-            <h2>Session expired</h2>
-            <p>Sign in again to continue. Unsaved form data on this page may be lost.</p>
-            <button
-              className="button button-primary"
-              type="button"
-              onClick={() => {
-                setSessionExpired(false)
-                logout()
-                navigate('/login')
-              }}
-            >
-              Sign in
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

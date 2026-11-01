@@ -1,4 +1,4 @@
-export const ROLES = ['SUPER_ADMIN', 'ADMIN', 'TEACHER', 'MANAGER'] as const
+export const ROLES = ['SUPER_ADMIN', 'ADMIN', 'TEACHER', 'MANAGER', 'EMPLOYEE', 'STUDENT'] as const
 export type Role = (typeof ROLES)[number]
 
 export const PERSON_TYPES = ['STUDENT', 'EMPLOYEE'] as const
@@ -38,10 +38,14 @@ export type Permission =
   | 'leave.review'
   | 'devices.manage'
   | 'reports.export'
+  | 'reports.schedule'
   | 'users.manage'
+  | 'students.invite'
+  | 'my-attendance.view'
   | 'settings.manage'
   | 'audit.view'
   | 'privacy.manage'
+  | 'platform.manage'
 
 export interface User {
   id: string
@@ -49,6 +53,35 @@ export interface User {
   email: string
   role: Role
   groupIds: string[]
+  organizationId?: string
+}
+
+export interface ManagedOrganization {
+  id: string
+  name: string
+  slug: string
+  mode: 'SCHOOL' | 'COMPANY' | 'BOTH'
+  status: 'ACTIVE' | 'INACTIVE'
+  createdAt: string
+}
+
+export interface CreatedInvitation {
+  id: string
+  email: string
+  name: string
+  role: Exclude<Role, 'SUPER_ADMIN'>
+  code: string
+  expiresAt: string
+}
+
+export interface PendingInvitation {
+  id: string
+  email: string
+  name: string
+  role: Exclude<Role, 'SUPER_ADMIN'>
+  groupIds: string[]
+  expiresAt: string
+  createdAt: string
 }
 
 export interface Person {
@@ -66,6 +99,8 @@ export interface Person {
   employeeId?: string
   designation?: string
   consentGiven: boolean
+  cameraConsentGiven?: boolean
+  cameraConsentGivenAt?: string | null
 }
 
 export interface Group {
@@ -135,7 +170,8 @@ export interface FaceEnrollment {
 
 export interface ScanEvent {
   eventId: string
-  deviceId: string
+  deviceId?: string
+  source?: 'DEVICE' | 'CAMERA'
   personId?: string
   rawLabel: string
   confidence: number
@@ -155,7 +191,7 @@ export interface AttendanceRecord {
   firstIn?: string
   lastOut?: string
   minutesWorked?: number
-  source: 'DEVICE' | 'MANUAL' | 'IMPORT'
+  source: 'DEVICE' | 'CAMERA' | 'MANUAL' | 'IMPORT'
   derivedFromEventIds: string[]
 }
 
@@ -213,10 +249,12 @@ export interface DashboardStats {
   late: number
   absent: number
   excused: number
+  notScanned?: number
   people: number
   exceptions: number
   rate: number
   trend: { day: string; present: number; late: number }[]
   groupRates: { name: string; rate: number }[]
   topAbsentees: { name: string; days: number }[]
+  date?: string
 }

@@ -1,6 +1,7 @@
 import type { DeviceHealth, RecordStatus, ScanResult } from '../../types/domain'
 
 const statusMeta: Record<string, { label: string; icon: string; className: string }> = {
+  ACTIVE: { label: 'Active', icon: '✓', className: 'present' },
   PRESENT: { label: 'Present', icon: '✓', className: 'present' },
   LATE: { label: 'Late', icon: '⏱', className: 'late' },
   ABSENT: { label: 'Absent', icon: '✕', className: 'absent' },
