@@ -1766,6 +1766,23 @@ td .button {
   font-weight: 500;
   animation: toast-in 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
+.server-starting-notice {
+  position: fixed;
+  z-index: 1100;
+  top: 16px;
+  left: 50%;
+  max-width: min(520px, calc(100vw - 32px));
+  padding: 12px 18px;
+  transform: translateX(-50%);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  color: var(--ink);
+  background: var(--surface);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.16);
+  text-align: center;
+  font-size: 13px;
+  font-weight: 500;
+}
 .toast-check {
   display: grid;
   width: 24px;

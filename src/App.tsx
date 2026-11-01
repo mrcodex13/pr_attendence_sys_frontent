@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { useAuth } from './auth/AuthContext'
 import { ProtectedRoute } from './auth/ProtectedRoute'
@@ -282,5 +282,25 @@ export default function App() {
       </Route>
       <Route path="*" element={<NotFoundPage />} />
     </Routes>
+  )
+}
+
+export function ServerStartingNotice() {
+  const [visible, setVisible] = useState(false)
+
+  useEffect(() => {
+    function updateNotice(event: Event) {
+      setVisible((event as CustomEvent<{ active: boolean }>).detail.active)
+    }
+
+    window.addEventListener('sas:server-starting', updateNotice)
+    return () => window.removeEventListener('sas:server-starting', updateNotice)
+  }, [])
+
+  if (!visible) return null
+  return (
+    <div className="server-starting-notice" role="status" aria-live="polite">
+      The server is starting up, this can take up to a minute.
+    </div>
   )
 }

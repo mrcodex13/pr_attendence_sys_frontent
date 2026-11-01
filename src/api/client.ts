@@ -22,6 +22,92 @@ import type {
 const TOKEN_KEY = 'sas.access'
 const REFRESH_KEY = 'sas.refresh'
 const USER_KEY = 'sas.user'
+const SERVER_UNAVAILABLE_MESSAGE = "Can't reach the server. Try again in a moment or contact your admin."
+const SERVER_STARTING_MESSAGE = 'The server is starting up, this can take up to a minute.'
+const SLOW_REQUEST_MS = 4000
+const REQUEST_TIMEOUT_MS = 65_000
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL?.trim().replace(/\/+$/, '') ?? ''
+
+if (import.meta.env.PROD && !API_BASE_URL) {
+  throw new Error('VITE_API_BASE_URL must be set to the deployed backend origin before building the frontend.')
+}
+
+let pendingSlowRequests = 0
+
+function apiUrl(path: string) {
+  return API_BASE_URL ? `${API_BASE_URL}${path}` : path
+}
+
+function reportSlowRequest(active: boolean) {
+  pendingSlowRequests = Math.max(0, pendingSlowRequests + (active ? 1 : -1))
+  window.dispatchEvent(new CustomEvent('sas:server-starting', {
+    detail: { active: pendingSlowRequests > 0 },
+  }))
+}
+
+async function apiFetch(path: string, options: RequestInit = {}) {
+  const startedAt = Date.now()
+  const controller = new AbortController()
+  const externalSignal = options.signal
+  let timedOut = false
+  let slowRequestReported = false
+  const slowTimer = window.setTimeout(() => {
+    slowRequestReported = true
+    reportSlowRequest(true)
+  }, SLOW_REQUEST_MS)
+  const timeoutTimer = window.setTimeout(() => {
+    timedOut = true
+    controller.abort()
+  }, REQUEST_TIMEOUT_MS)
+  const abortFromCaller = () => controller.abort(externalSignal?.reason)
+
+  if (externalSignal?.aborted) abortFromCaller()
+  else externalSignal?.addEventListener('abort', abortFromCaller, { once: true })
+
+  try {
+    return await fetch(apiUrl(path), { ...options, signal: controller.signal })
+  } catch {
+    if (externalSignal?.aborted && !timedOut) throw new Error('The request was cancelled.')
+    const elapsed = Date.now() - startedAt
+    throw new Error(timedOut || elapsed >= SLOW_REQUEST_MS
+      ? SERVER_STARTING_MESSAGE
+      : SERVER_UNAVAILABLE_MESSAGE)
+  } finally {
+    window.clearTimeout(slowTimer)
+    window.clearTimeout(timeoutTimer)
+    externalSignal?.removeEventListener('abort', abortFromCaller)
+    if (slowRequestReported) reportSlowRequest(false)
+  }
+}
+
+async function readJsonBody<T>(response: Response): Promise<T | null> {
+  const contentType = response.headers.get('content-type') ?? ''
+  if (!/^(application\/json|[\w.+-]+\/[\w.+-]+\+json)(?:\s*;|$)/i.test(contentType.trim())) return null
+  try {
+    return await response.json() as T
+  } catch {
+    return null
+  }
+}
+
+async function responseError(response: Response, elapsed: number, fallback: string) {
+  const body = await readJsonBody<{ error?: { code?: string; message?: string } }>(response)
+  if (body?.error?.code === 'EMAIL_NOT_CONFIGURED' && body.error.message) {
+    return new Error(body.error.message)
+  }
+  if (response.status === 404 || response.status >= 500) {
+    return new Error(elapsed >= SLOW_REQUEST_MS ? SERVER_STARTING_MESSAGE : SERVER_UNAVAILABLE_MESSAGE)
+  }
+  const message = body?.error?.message
+  if (message && !/(?:^|\n)\s*(?:Error|SyntaxError|TypeError):|\bat\s.+:\d+:\d+\)?|unexpected token|unexpected end of (?:json|input)|json parse/i.test(message)) {
+    return new Error(message)
+  }
+  return new Error(fallback)
+}
+
+function invalidResponseError() {
+  return new Error("The server couldn't complete your request. Try again in a moment.")
+}
 
 export class CameraFrameError extends Error {
   readonly code: string
@@ -71,36 +157,33 @@ async function authenticatedFetch(path: string, options: RequestInit = {}) {
     const user = getStoredUser()
     if (token) headers.set('Authorization', `Bearer ${token}`)
     if (user?.organizationId) headers.set('X-Organization-Id', user.organizationId)
-    return fetch(path, { ...options, headers })
+    return apiFetch(path, { ...options, headers })
   }
 
+  const startedAt = Date.now()
   let res = await send()
   if (res.status === 401 && !path.endsWith('/auth/refresh') && !path.endsWith('/auth/logout')) {
     const refreshToken = localStorage.getItem(REFRESH_KEY)
     if (refreshToken) {
-      const refreshResponse = await fetch('/api/v1/auth/refresh', {
+      const refreshResponse = await apiFetch('/api/v1/auth/refresh', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ refreshToken }),
       })
       if (refreshResponse.ok) {
-        let refreshBody: { data?: { user?: User; accessToken?: string; refreshToken?: string } }
-        try {
-          refreshBody = await refreshResponse.json() as typeof refreshBody
-        } catch {
-          expireSession()
-          throw new Error('The server returned an invalid refresh response.')
-        }
-        const session = refreshBody.data
+        const refreshBody = await readJsonBody<{ data?: { user?: User; accessToken?: string; refreshToken?: string } }>(refreshResponse)
+        const session = refreshBody?.data
         if (session?.user && session.accessToken && session.refreshToken) {
           storeSession(session.user, session.accessToken, session.refreshToken)
           res = await send()
         } else {
           expireSession()
-          throw new Error('The server returned an invalid refresh response.')
+          throw invalidResponseError()
         }
-      } else {
+      } else if (refreshResponse.status === 401) {
         expireSession()
+      } else {
+        throw await responseError(refreshResponse, Date.now() - startedAt, 'Could not refresh the sign-in session.')
       }
     } else {
       expireSession()
@@ -111,13 +194,11 @@ async function authenticatedFetch(path: string, options: RequestInit = {}) {
 }
 
 async function backendRequest<T>(path: string, options: RequestInit = {}) {
+  const startedAt = Date.now()
   const res = await authenticatedFetch(path, options)
-  const body = await res.json() as {
-    data?: T
-    error?: { message?: string }
-  }
-  if (!res.ok) throw new Error(body.error?.message ?? 'The request could not be completed.')
-  if (body.data === undefined) throw new Error('The server returned an invalid response.')
+  if (!res.ok) throw await responseError(res, Date.now() - startedAt, 'The request could not be completed.')
+  const body = await readJsonBody<{ data?: T }>(res)
+  if (!body || body.data === undefined) throw invalidResponseError()
   return body.data
 }
 
@@ -131,26 +212,24 @@ export function connectLiveFeed(onScan: (scan: ScanEvent) => void, onError: (err
       expireSession()
       return false
     }
-    const response = await fetch('/api/v1/auth/refresh', {
+    const startedAt = Date.now()
+    const response = await apiFetch('/api/v1/auth/refresh', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ refreshToken }),
       signal: controller.signal,
     })
     if (!response.ok) {
-      expireSession()
-      return false
+      if (response.status === 401) {
+        expireSession()
+        return false
+      }
+      throw await responseError(response, Date.now() - startedAt, 'Could not refresh the sign-in session.')
     }
-    let body: { data?: { user?: User; accessToken?: string; refreshToken?: string } }
-    try {
-      body = await response.json() as typeof body
-    } catch {
+    const body = await readJsonBody<{ data?: { user?: User; accessToken?: string; refreshToken?: string } }>(response)
+    if (!body?.data?.user || !body.data.accessToken || !body.data.refreshToken) {
       expireSession()
-      throw new Error('The server returned an invalid refresh response.')
-    }
-    if (!body.data?.user || !body.data.accessToken || !body.data.refreshToken) {
-      expireSession()
-      throw new Error('The server returned an invalid refresh response.')
+      throw invalidResponseError()
     }
     storeSession(body.data.user, body.data.accessToken, body.data.refreshToken)
     return true
@@ -166,14 +245,16 @@ export function connectLiveFeed(onScan: (scan: ScanEvent) => void, onError: (err
         if (token) headers.set('Authorization', `Bearer ${token}`)
         if (user?.organizationId) headers.set('X-Organization-Id', user.organizationId)
         if (lastEventId) headers.set('Last-Event-ID', lastEventId)
-        let response = await fetch('/api/v1/events/live', { headers, signal: controller.signal })
+        let startedAt = Date.now()
+        let response = await apiFetch('/api/v1/events/live', { headers, signal: controller.signal })
         if (response.status === 401 && await refreshForStream()) {
           headers.set('Authorization', `Bearer ${getStoredAccessToken()}`)
-          response = await fetch('/api/v1/events/live', { headers, signal: controller.signal })
+          startedAt = Date.now()
+          response = await apiFetch('/api/v1/events/live', { headers, signal: controller.signal })
         }
         if (!response.ok || !response.body) {
-          const body = await response.json().catch(() => null) as { error?: { message?: string } } | null
-          throw new Error(body?.error?.message ?? 'The live feed is unavailable.')
+          if (!response.ok) throw await responseError(response, Date.now() - startedAt, 'The live feed is unavailable.')
+          throw invalidResponseError()
         }
         retryDelay = 1000
         const reader = response.body.getReader()
@@ -196,7 +277,12 @@ export function connectLiveFeed(onScan: (scan: ScanEvent) => void, onError: (err
               }
               if (eventId) lastEventId = eventId
               if (data) {
-                const scan = JSON.parse(data) as ScanEvent
+                let scan: ScanEvent
+                try {
+                  scan = JSON.parse(data) as ScanEvent
+                } catch {
+                  throw new Error('The live feed returned an invalid response.')
+                }
                 onScan(scan)
               }
               boundary = pending.indexOf('\n\n')
@@ -207,7 +293,12 @@ export function connectLiveFeed(onScan: (scan: ScanEvent) => void, onError: (err
         }
       } catch (error) {
         if (controller.signal.aborted) return
-        onError(error instanceof Error ? error : new Error('The live feed connection failed.'))
+        onError(error instanceof Error && (
+          error.message === SERVER_UNAVAILABLE_MESSAGE ||
+          error.message === SERVER_STARTING_MESSAGE ||
+          error.message === 'The live feed returned an invalid response.' ||
+          error.message === 'The live feed is unavailable.'
+        ) ? error : new Error(SERVER_UNAVAILABLE_MESSAGE))
       }
       await new Promise((resolve) => window.setTimeout(resolve, retryDelay))
       retryDelay = Math.min(retryDelay * 2, 15000)
@@ -223,12 +314,14 @@ type BackendLoginResult =
   | { organizationSelectionRequired: false; user: User; accessToken: string; refreshToken: string }
 
 async function backendLogin(email: string, password: string, organizationId?: string): Promise<BackendLoginResult> {
-  const res = await fetch('/api/v1/auth/login', {
+  const startedAt = Date.now()
+  const res = await apiFetch('/api/v1/auth/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password, organizationId }),
   })
-  const body = await res.json() as {
+  if (!res.ok) throw await responseError(res, Date.now() - startedAt, 'Could not sign in.')
+  const body = await readJsonBody<{
     data?: {
       user?: User
       accessToken?: string
@@ -236,15 +329,14 @@ async function backendLogin(email: string, password: string, organizationId?: st
       organizationSelectionRequired?: boolean
       organizations?: Array<{ id: string; name: string }>
     }
-    error?: { message?: string }
-  }
-  if (!res.ok) throw new Error(body.error?.message ?? 'Could not sign in.')
+  }>(res)
+  if (!body) throw invalidResponseError()
   const data = body.data
   if (data?.organizationSelectionRequired && data.organizations) {
     return { organizationSelectionRequired: true, organizations: data.organizations }
   }
   const { user, accessToken, refreshToken } = data ?? {}
-  if (!user || !accessToken || !refreshToken) throw new Error('The server returned an invalid sign-in response.')
+  if (!user || !accessToken || !refreshToken) throw invalidResponseError()
   return { user, accessToken, refreshToken, organizationSelectionRequired: false as const }
 }
 
@@ -253,18 +345,20 @@ export const api = {
     return backendLogin(email, password, organizationId)
   },
   async acceptInvitation(code: string, password: string) {
-    const response = await fetch('/api/v1/auth/accept-invitation', {
+    const startedAt = Date.now()
+    const response = await apiFetch('/api/v1/auth/accept-invitation', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ code, password }),
     })
-    const body = await response.json() as {
-      data?: { user?: User; accessToken?: string; refreshToken?: string }
-      error?: { message?: string }
+    if (!response.ok) {
+      throw await responseError(response, Date.now() - startedAt, 'Could not accept invitation.')
     }
-    if (!response.ok) throw new Error(body.error?.message ?? 'Could not accept invitation.')
-    const { user, accessToken, refreshToken } = body.data ?? {}
-    if (!user || !accessToken || !refreshToken) throw new Error('The server returned an invalid invitation response.')
+    const body = await readJsonBody<{
+      data?: { user?: User; accessToken?: string; refreshToken?: string }
+    }>(response)
+    const { user, accessToken, refreshToken } = body?.data ?? {}
+    if (!user || !accessToken || !refreshToken) throw invalidResponseError()
     return { user, accessToken, refreshToken }
   },
   logout() {
@@ -409,13 +503,13 @@ export const api = {
     })
   },
   async amb82CameraFrame(signal?: AbortSignal) {
+    const startedAt = Date.now()
     const response = await authenticatedFetch('/api/v1/camera/amb82/frame', { signal })
     if (!response.ok) {
-      const body = await response.json().catch(() => null) as {
-        error?: { code?: string; message?: string }
-      } | null
+      const body = await readJsonBody<{ error?: { code?: string } }>(response)
+      const error = await responseError(response, Date.now() - startedAt, 'Could not load the AMB82 camera frame.')
       throw new CameraFrameError(
-        body?.error?.message ?? 'Could not load the AMB82 camera frame.',
+        error.message,
         body?.error?.code ?? 'CAMERA_STREAM_ERROR',
       )
     }
@@ -570,10 +664,10 @@ export const api = {
     const user = getStoredUser()
     if (token) headers.set('Authorization', `Bearer ${token}`)
     if (user?.organizationId) headers.set('X-Organization-Id', user.organizationId)
+    const startedAt = Date.now()
     const response = await authenticatedFetch(`/api/v1/reports/attendance/export?${params.toString()}`, { headers })
     if (!response.ok) {
-      const body = await response.json() as { error?: { message?: string } }
-      throw new Error(body.error?.message ?? 'Could not export attendance report.')
+      throw await responseError(response, Date.now() - startedAt, 'Could not export attendance report.')
     }
     return response.blob()
   },
