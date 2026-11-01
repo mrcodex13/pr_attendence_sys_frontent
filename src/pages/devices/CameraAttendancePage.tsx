@@ -74,16 +74,14 @@ export function CameraAttendancePage() {
       faceapi.nets.tinyFaceDetector.loadFromUri('/models'),
       faceapi.nets.faceLandmark68Net.loadFromUri('/models'),
       faceapi.nets.faceRecognitionNet.loadFromUri('/models'),
-      api.amb82CameraConfig().catch(() => ({ url: 'rtsp://10.130.136.20:554', configured: true })),
+      api.amb82CameraConfig(),
     ]).then(([groupRows, , , , cfg]) => {
       if (!active) return
       setGroups(groupRows)
       setGroupId(groupRows[0]?.id ?? '')
       setModelsReady(true)
-      if (cfg?.url) {
-        setRtspUrl(cfg.url)
-        setNewRtspUrl(cfg.url)
-      }
+      setRtspUrl(cfg.url ?? '')
+      setNewRtspUrl(cfg.url ?? '')
     }).catch((err: unknown) => {
       if (active) {
         setError(err instanceof Error
@@ -797,7 +795,7 @@ export function CameraAttendancePage() {
             <div className="camera-rtsp-settings-box">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ fontSize: 13, color: 'var(--muted)' }}>
-                  AMB82 Stream: <strong style={{ color: 'var(--ink)' }}>{rtspUrl || 'rtsp://10.130.136.20:554'}</strong>
+                  AMB82 Stream: <strong style={{ color: 'var(--ink)' }}>{rtspUrl || 'Not configured on backend'}</strong>
                 </span>
                 <button
                   className="button button-sm button-ghost"
