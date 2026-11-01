@@ -12,8 +12,11 @@ export default defineConfig(({ mode }) => {
     try {
       const url = new URL(apiBaseUrl)
       if (!['http:', 'https:'].includes(url.protocol) || url.origin !== apiBaseUrl) throw new Error()
+      if (url.hostname === 'your-backend.onrender.com' || url.hostname === 'example.com') {
+        throw new Error('placeholder')
+      }
     } catch {
-      throw new Error('VITE_API_BASE_URL must be an HTTP(S) backend origin without a path.')
+      throw new Error('VITE_API_BASE_URL must be your real backend HTTP(S) origin, without a path or example placeholder.')
     }
   }
 
