@@ -33,7 +33,7 @@ export function ForgotPasswordPage() {
             <Icon name="key" size={22} />
           </div>
           <h1>Forgot password</h1>
-          <p className="muted auth-subtitle">We’ll send a reset link if the account exists.</p>
+          <p className="muted auth-subtitle">We’ll send a reset link if the account exists. If email is unavailable, contact your platform administrator.</p>
           {sent ? (
             <div className="error-message" role="status" style={{ color: 'var(--green)', background: 'var(--green-pale)' }}>
               {developmentResetUrl ? (
