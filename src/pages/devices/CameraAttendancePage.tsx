@@ -45,6 +45,8 @@ export function CameraAttendancePage() {
   const [cameraActive, setCameraActive] = useState(false)
   const [cameraStatus, setCameraStatus] = useState<'off' | 'connecting' | 'connected' | 'unavailable'>('off')
   const [cameraError, setCameraError] = useState('')
+  const [cameraDevices, setCameraDevices] = useState<MediaDeviceInfo[]>([])
+  const [selectedCameraId, setSelectedCameraId] = useState('')
   const [modelsReady, setModelsReady] = useState(false)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
@@ -143,7 +145,7 @@ export function CameraAttendancePage() {
   }, [stopWebcamTracks])
 
   // Start Camera
-  const startCamera = useCallback(async () => {
+  const startCamera = useCallback(async (requestedDeviceId?: string) => {
     setError('')
     setMessage('')
     setCameraError('')
@@ -152,8 +154,17 @@ export function CameraAttendancePage() {
 
     if (cameraSource === 'webcam') {
       try {
+        if (!navigator.mediaDevices?.getUserMedia) {
+          throw new Error('Camera access requires a supported browser and a secure HTTPS connection.')
+        }
         const stream = await navigator.mediaDevices.getUserMedia({
-          video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' },
+          video: {
+            width: { ideal: 640 },
+            height: { ideal: 480 },
+            ...(requestedDeviceId
+              ? { deviceId: { exact: requestedDeviceId } }
+              : { facingMode: 'user' }),
+          },
           audio: false,
         })
         mediaStreamRef.current = stream
@@ -161,13 +172,56 @@ export function CameraAttendancePage() {
           videoRef.current.srcObject = stream
           await videoRef.current.play()
         }
+        const devices = (await navigator.mediaDevices.enumerateDevices())
+          .filter((device) => device.kind === 'videoinput')
+        setCameraDevices(devices)
+        const activeDeviceId = stream.getVideoTracks()[0]?.getSettings().deviceId
+        const nextDeviceId = requestedDeviceId || activeDeviceId || devices[0]?.deviceId || ''
+        setSelectedCameraId(nextDeviceId)
         setCameraStatus('connected')
       } catch (err) {
+        stopWebcamTracks()
         setCameraStatus('unavailable')
-        setCameraError(err instanceof Error ? `Webcam error: ${err.message}` : 'Webcam access denied or unavailable.')
+        const errorName = err instanceof DOMException ? err.name : ''
+        setCameraError(errorName === 'NotAllowedError'
+          ? 'Allow camera access in your browser settings, then try again.'
+          : errorName === 'NotFoundError' || errorName === 'OverconstrainedError'
+            ? 'No selected camera was found. Start OBS Virtual Camera or choose another camera.'
+            : errorName === 'NotReadableError'
+              ? 'The camera is busy. Close other apps using it and try again.'
+              : err instanceof Error
+                ? err.message
+                : 'Camera access was denied or unavailable.')
       }
     }
-  }, [cameraSource])
+  }, [cameraSource, stopWebcamTracks])
+
+  const refreshCameraDevices = useCallback(async () => {
+    if (!navigator.mediaDevices?.enumerateDevices) {
+      setCameraError('This browser does not support camera selection.')
+      return
+    }
+    try {
+      const devices = (await navigator.mediaDevices.enumerateDevices())
+        .filter((device) => device.kind === 'videoinput')
+      setCameraDevices(devices)
+      if (!devices.some((device) => device.deviceId === selectedCameraId)) {
+        setSelectedCameraId(devices[0]?.deviceId ?? '')
+      }
+      if (devices.length === 0) setCameraError('No cameras found. Start OBS Virtual Camera, then refresh the camera list.')
+      else setCameraError('')
+    } catch {
+      setCameraError('Could not list cameras. Check browser camera permissions and try again.')
+    }
+  }, [selectedCameraId])
+
+  const selectCameraDevice = async (deviceId: string) => {
+    setSelectedCameraId(deviceId)
+    if (!cameraActive) return
+    stopWebcamTracks()
+    setCameraStatus('connecting')
+    await startCamera(deviceId)
+  }
 
   // Switch camera source cleanly
   const switchCameraSource = (nextSource: CameraSource) => {
@@ -633,6 +687,38 @@ export function CameraAttendancePage() {
             📷 Laptop Webcam
           </button>
         </div>
+
+        {cameraSource === 'webcam' && (
+          <div style={{ display: 'grid', gap: 6, minWidth: 240, flex: '1 1 280px' }}>
+            <div style={{ display: 'flex', alignItems: 'end', gap: 8 }}>
+              <label className="form-field" style={{ flex: 1, minWidth: 180 }}>
+                <span>Camera input</span>
+                <select
+                  value={selectedCameraId}
+                  onChange={(event) => void selectCameraDevice(event.target.value)}
+                  disabled={cameraDevices.length === 0}
+                >
+                  {cameraDevices.length === 0 && <option value="">Start camera to list devices</option>}
+                  {cameraDevices.map((device, index) => (
+                    <option key={device.deviceId} value={device.deviceId}>
+                      {device.label || `Camera ${index + 1}`}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button
+                className="button button-secondary button-sm"
+                type="button"
+                onClick={() => void refreshCameraDevices()}
+              >
+                Refresh
+              </button>
+            </div>
+            <small className="muted">
+              For AMB82: add its RTSP stream as an OBS Media Source, start OBS Virtual Camera, then select it here.
+            </small>
+          </div>
+        )}
 
         {/* Mode Tabs: Scan vs Enroll */}
         <div className="filter-tabs" role="tablist" aria-label="Task Mode">
