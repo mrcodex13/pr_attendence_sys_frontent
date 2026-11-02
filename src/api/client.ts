@@ -27,6 +27,7 @@ const SERVER_STARTING_MESSAGE = 'The server is starting up, this can take up to 
 const SLOW_REQUEST_MS = 4000
 const REQUEST_TIMEOUT_MS = 65_000
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL?.trim().replace(/\/+$/, '') ?? ''
+const LOCAL_CAMERA_BRIDGE_URL = 'http://127.0.0.1:8765'
 
 if (import.meta.env.PROD && !API_BASE_URL) {
   throw new Error('VITE_API_BASE_URL must be set to the deployed backend origin before building the frontend.')
@@ -515,6 +516,46 @@ export const api = {
     }
     if (!response.headers.get('content-type')?.startsWith('image/jpeg')) {
       throw new CameraFrameError('The camera endpoint returned an invalid frame.', 'INVALID_CAMERA_FRAME')
+    }
+    return response.blob()
+  },
+  async configureLocalAmb82Camera(url: string) {
+    let response: Response
+    try {
+      response = await fetch(`${LOCAL_CAMERA_BRIDGE_URL}/configure`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url }),
+      })
+    } catch {
+      throw new Error('Cannot reach the local AMB82 connector. Start it on this laptop, then save the URL again.')
+    }
+    if (!response.ok) {
+      const body = await readJsonBody<{ error?: { message?: string } }>(response)
+      throw new Error(body?.error?.message || 'The local camera connector rejected the RTSP URL.')
+    }
+    return readJsonBody<{ configured: boolean }>(response)
+  },
+  async localAmb82CameraFrame(signal?: AbortSignal) {
+    let response: Response
+    try {
+      response = await fetch(`${LOCAL_CAMERA_BRIDGE_URL}/frame`, { signal })
+    } catch {
+      if (signal?.aborted) throw new CameraFrameError('The camera request was cancelled.', 'REQUEST_CANCELLED')
+      throw new CameraFrameError(
+        'Cannot reach the local AMB82 connector. Start it on this laptop and allow the website to access the local network.',
+        'LOCAL_CONNECTOR_UNAVAILABLE',
+      )
+    }
+    if (!response.ok) {
+      const body = await readJsonBody<{ error?: { code?: string; message?: string } }>(response)
+      throw new CameraFrameError(
+        body?.error?.message || 'The local AMB82 stream is unavailable.',
+        body?.error?.code || 'LOCAL_CAMERA_STREAM_ERROR',
+      )
+    }
+    if (!response.headers.get('content-type')?.startsWith('image/jpeg')) {
+      throw new CameraFrameError('The local camera connector returned an invalid frame.', 'INVALID_CAMERA_FRAME')
     }
     return response.blob()
   },

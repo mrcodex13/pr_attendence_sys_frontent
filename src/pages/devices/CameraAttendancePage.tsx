@@ -38,7 +38,7 @@ export function CameraAttendancePage() {
 
   // Modes & Camera Source
   const [mode, setMode] = useState<CameraMode>('attendance')
-  const [cameraSource, setCameraSource] = useState<CameraSource>('amb82') // AMB82-Mini by default
+  const [cameraSource, setCameraSource] = useState<CameraSource>('amb82')
   const [enrollmentFilter, setEnrollmentFilter] = useState<EnrollmentFilter>('pending')
 
   // Camera State
@@ -64,11 +64,11 @@ export function CameraAttendancePage() {
   const [matchMessage, setMatchMessage] = useState('')
 
   // RTSP Config
-  const [rtspUrl, setRtspUrl] = useState('')
-  const [showRtspEdit, setShowRtspEdit] = useState(false)
+  const [rtspConfigured, setRtspConfigured] = useState(false)
+  const [showRtspEdit, setShowRtspEdit] = useState(true)
   const [newRtspUrl, setNewRtspUrl] = useState('')
 
-  // Load groups, models, and RTSP config on mount
+  // Load groups and face recognition models on mount
   useEffect(() => {
     let active = true
     Promise.all([
@@ -76,14 +76,11 @@ export function CameraAttendancePage() {
       faceapi.nets.tinyFaceDetector.loadFromUri('/models'),
       faceapi.nets.faceLandmark68Net.loadFromUri('/models'),
       faceapi.nets.faceRecognitionNet.loadFromUri('/models'),
-      api.amb82CameraConfig(),
-    ]).then(([groupRows, , , , cfg]) => {
+    ]).then(([groupRows]) => {
       if (!active) return
       setGroups(groupRows)
       setGroupId(groupRows[0]?.id ?? '')
       setModelsReady(true)
-      setRtspUrl(cfg.url ?? '')
-      setNewRtspUrl(cfg.url ?? '')
     }).catch((err: unknown) => {
       if (active) {
         setError(err instanceof Error
@@ -352,7 +349,7 @@ export function CameraAttendancePage() {
     async function pollFrame() {
       let bitmap: ImageBitmap | null = null
       try {
-        const frame = await api.amb82CameraFrame(controller.signal)
+        const frame = await api.localAmb82CameraFrame(controller.signal)
         bitmap = await createImageBitmap(frame)
         if (active && canvasRef.current) {
           const canvas = canvasRef.current
@@ -601,10 +598,10 @@ export function CameraAttendancePage() {
     setError('')
     setBusy(true)
     try {
-      await api.updateAmb82CameraConfig(newRtspUrl.trim())
-      setRtspUrl(newRtspUrl.trim())
+      await api.configureLocalAmb82Camera(newRtspUrl.trim())
+      setRtspConfigured(true)
       setShowRtspEdit(false)
-      setMessage(`AMB82 RTSP URL updated to ${newRtspUrl.trim()}`)
+      setMessage('AMB82 RTSP URL configured on this laptop. It was not sent to the cloud backend.')
       if (cameraActive && cameraSource === 'amb82') {
         stopCamera()
       }
@@ -677,7 +674,7 @@ export function CameraAttendancePage() {
             className={`camera-source-btn ${cameraSource === 'amb82' ? 'active' : ''}`}
             onClick={() => switchCameraSource('amb82')}
           >
-            📡 AMB82-Mini (Default)
+            📡 AMB82-Mini (Local)
           </button>
           <button
             type="button"
@@ -805,12 +802,12 @@ export function CameraAttendancePage() {
                 <div style={{ textAlign: 'center', maxWidth: 360, padding: 20 }}>
                   <p style={{ fontWeight: 600, fontSize: 15, margin: '0 0 8px' }}>
                     {cameraStatus === 'connecting'
-                      ? (cameraSource === 'amb82' ? 'Connecting to AMB82-Mini RTSP…' : 'Starting Webcam…')
+                      ? (cameraSource === 'amb82' ? 'Connecting to local AMB82…' : 'Starting Webcam…')
                       : (cameraSource === 'amb82' ? 'AMB82-Mini Stream Unavailable' : 'Webcam Not Available')}
                   </p>
                   <p style={{ fontSize: 13, color: '#94a3b8', margin: '0 0 16px' }}>
                     {cameraSource === 'amb82'
-                      ? `Could not reach ${rtspUrl || 'AMB82 IP'}. Ensure AMB82 is powered on WiFi.`
+                      ? 'Check that the local connector is running on this laptop and that the RTSP stream works in VLC.'
                       : 'Check browser camera permissions.'}
                   </p>
                   <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
@@ -881,7 +878,9 @@ export function CameraAttendancePage() {
             <div className="camera-rtsp-settings-box">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ fontSize: 13, color: 'var(--muted)' }}>
-                  AMB82 Stream: <strong style={{ color: 'var(--ink)' }}>{rtspUrl || 'Not configured on backend'}</strong>
+                  Local connector: <strong style={{ color: 'var(--ink)' }}>
+                    {rtspConfigured ? 'RTSP configured on this laptop' : 'not configured'}
+                  </strong>
                 </span>
                 <button
                   className="button button-sm button-ghost"
@@ -910,6 +909,9 @@ export function CameraAttendancePage() {
                   </button>
                 </div>
               )}
+              <p className="muted" style={{ fontSize: 12, margin: '8px 0 0' }}>
+                Run <code>npm run camera:bridge</code> from the backend folder on this laptop first. Allow the browser's local-network prompt. The connector reads RTSP locally; attendance still saves to the cloud.
+              </p>
             </div>
           )}
 
